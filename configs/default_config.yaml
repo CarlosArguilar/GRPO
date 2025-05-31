@@ -1,0 +1,47 @@
+# Default GRPO Configuration
+
+# Training Parameters
+training:
+  group_size: 64                    # Number of actions to sample per state
+  batch_size: 1024                  # Batch size for training
+  learning_rate: 1.0e-6            # Learning rate for policy optimization
+  num_epochs_per_update: 1          # Number of epochs per GRPO update
+  num_iterations: 1000              # Total number of training iterations
+  
+# GRPO Algorithm Parameters  
+grpo:
+  clip_epsilon: 0.2                 # Clipping parameter for PPO-style objective
+  kl_coeff: 0.04                   # Coefficient for KL divergence penalty
+  entropy_coeff: 0.0               # Coefficient for entropy bonus
+  normalize_advantages: true        # Whether to normalize advantages
+  advantage_epsilon: 1.0e-8        # Small value for advantage normalization
+  
+# Optimization
+optimization:
+  max_grad_norm: 1.0               # Maximum gradient norm for clipping
+  optimizer: "AdamW"               # Optimizer type
+  weight_decay: 0.0                # Weight decay for regularization
+  
+# Hardware
+hardware:
+  device: "auto"                   # Device: "auto", "cuda", "cpu"
+  mixed_precision: false           # Whether to use mixed precision training
+  
+# Logging
+logging:
+  log_interval: 10                 # Log metrics every N iterations
+  save_interval: 100               # Save checkpoint every N iterations
+  log_dir: "./logs"               # Directory for log files
+  log_level: "INFO"               # Logging level
+  log_to_console: true            # Whether to log to console
+  log_to_file: true               # Whether to log to file
+  
+# Checkpointing
+checkpointing:
+  save_dir: "./checkpoints"       # Directory for model checkpoints
+  keep_last_n: 5                 # Number of recent checkpoints to keep
+  
+# Data
+data:
+  shuffle: true                   # Whether to shuffle data
+  seed: 42                        # Random seed for reproducibility 
