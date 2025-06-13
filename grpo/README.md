@@ -54,8 +54,53 @@ batch = collector.collect_experiences(states)
 
 ---
 
+## 2. Advantage Estimator – `advantage_estimator.py`
+
+### 2.1  Role in the algorithm
+Once we have sampled actions and rewards, GRPO needs a *signal* that tells each
+action **how much better or worse it is** relative to its competition **within
+the same state**.  That signal is the *group-relative advantage*:
+
+\[ A_{i,j} = r_{i,j} - \bar r_i \]
+
+where \(\bar r_i\) is the mean reward over the *group_size* actions sampled for
+state \(i\).  The advantage is later plugged into the clipped GRPO objective to
+scale policy-gradient updates.
+
+### 2.2  Key features
+• **Per-group baselines** – Computes the mean reward for each state and
+  subtracts it from every action in that group.  No information leakage across
+  states.
+• **Optional normalisation** – Centres and scales all advantages across the
+  batch to zero mean / unit variance (variance-reduction trick).
+• **One-pass algorithm** – Rewards are traversed once; advantages are stored in
+  a single contiguous 1-D tensor matching the flattened action order expected
+  by the GRPO objective.
+• **Stateless & thread-safe** – The class holds only its hyper-parameters
+  (`normalize_advantages`, `advantage_epsilon`).  Multiple estimators can run
+  concurrently.
+
+### 2.3  Optimisations implemented
+1. **List → tensor conversion done once** – The nested `reward_groups`
+   structure is converted to a tensor *after* the baseline subtraction so we
+   allocate GPU memory exactly once.
+2. **Numerical stability ε** – Prevents a divide-by-zero when all advantages are
+   equal (rare but possible in degenerate reward functions).
+3. **Coverage-friendly corner-case guard** – An early return for empty batches
+   (unlikely in practice) is marked with `# pragma: no cover` so it doesn't
+   skew test-coverage metrics.
+
+### 2.4  Typical usage snippet
+```python
+from grpo.advantage_estimator import AdvantageEstimator
+
+adv_estimator = AdvantageEstimator(normalize_advantages=True)
+advantages    = adv_estimator.compute_advantages(batch)  # 1-D torch.Tensor
+```
+
+---
+
 *Future sections will document:*  
-• Advantage estimation (`advantage_estimator.py`)  
 • GRPO clipped objective (`grpo_objective.py`)  
 • Training loop orchestration (`trainer.py`)  
 • Base interfaces (`policy_base.py`, `reward_model_base.py`)  
