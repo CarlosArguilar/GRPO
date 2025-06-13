@@ -3,7 +3,7 @@
 This sub-package contains all the core components required to train an agent with **Group-Relative Policy Optimisation (GRPO)**.  Each module maps cleanly to a conceptual step in the GRPO pipeline, enabling the framework to remain **model-agnostic**, highly testable and easy to extend.
 
 > **Note**  
-> This document will be progressively expanded.  For the moment it focuses on the *experience buffer* because this is the linchpin that connects the rollout and optimisation phases.  Other modules will be documented in upcoming iterations.
+> This document provides comprehensive coverage of all GRPO components. Each section focuses on the role, features, optimizations, and usage patterns of the core modules.
 
 ---
 
@@ -116,15 +116,15 @@ $$L = -\mathbf{E}[\min(\rho A, \hat{\rho} A)] + \lambda_{\text{KL}} \text{KL}(\p
 
 Where:
 
-* $\ell$ = log-probability of the selected action under the **current** policy $\pi_\theta$
+* $\ell$ = log-probability of the selected action under the **current** policy $\pi_\theta$
 * $\ell_0$ = log-probability of the same action under the **behaviour / old** policy (recorded during rollout)
-* $A$     = *group-relative advantage* produced by the Advantage Estimator
-* $\rho = \exp(\ell - \ell_0)$ = likelihood ratio
-* $\hat{\rho} = \text{clip}(\rho, 1-\varepsilon_{\text{clip}}, 1+\varepsilon_{\text{clip}})$ = clipped likelihood ratio with hyper-parameter $\varepsilon_{\text{clip}}$
-* $\lambda_{\text{KL}}$ = coefficient controlling the **KL penalty** to the reference policy $\pi_{\text{ref}}$
-* $\beta_{\text{ent}}$ = coefficient for the **entropy bonus**
-* $\mathcal H(\pi_\theta)$ = Shannon entropy of the current policy's action distribution
-* $\mathbf{E}[\,\cdot\,]$ = expectation over the collected batch of actions
+* $A$     = *group-relative advantage* produced by the Advantage Estimator
+* $\rho = \exp(\ell - \ell_0)$ = likelihood ratio
+* $\hat{\rho} = \text{clip}(\rho, 1-\varepsilon_{\text{clip}}, 1+\varepsilon_{\text{clip}})$ = clipped likelihood ratio with hyper-parameter $\varepsilon_{\text{clip}}$
+* $\lambda_{\text{KL}}$ = coefficient controlling the **KL penalty** to the reference policy $\pi_{\text{ref}}$
+* $\beta_{\text{ent}}$ = coefficient for the **entropy bonus**
+* $\mathcal H(\pi_\theta)$ = Shannon entropy of the current policy's action distribution
+* $\mathbf{E}[\,\cdot\,]$ = expectation over the collected batch of actions
 
 Intuitively: we *maximise* the clipped surrogate term (hence minimise its negative),
 keep the policy close to $\pi_{\text{ref}}$ via the KL penalty, and optionally encourage exploration with the entropy bonus.
@@ -168,7 +168,216 @@ optimizer.step()
 
 ---
 
-*Future sections will document:*  
-• Training loop orchestration (`trainer.py`)  
-• Base interfaces (`policy_base.py`, `reward_model_base.py`)  
-• Utility helpers (`utils/`) and logging facilities. 
+## 4. Training Orchestration – `trainer.py`
+
+### 4.1  Role in the algorithm
+The `GRPOTrainer` is the **orchestration layer** that ties together all GRPO components into a complete training pipeline. It handles:
+
+1. **Experience collection** – Generates actions and computes rewards for given states
+2. **Advantage computation** – Transforms rewards into group-relative advantages
+3. **Multi-epoch optimization** – Runs multiple gradient steps on the same batch
+4. **Reference policy management** – Updates the reference policy for KL regularization
+5. **Gradient processing** – Applies clipping and accumulation across mini-batches
+6. **Metrics tracking** – Comprehensive logging of training statistics
+7. **Checkpoint management** – Save/load training state for resumption
+
+### 4.2  Configuration management
+The trainer uses `GRPOConfig` dataclass for centralized hyperparameter management:
+
+```python
+@dataclass
+class GRPOConfig:
+    group_size: int = 4                    # Actions sampled per state
+    batch_size: int = 64                   # Mini-batch size for optimization
+    num_epochs_per_update: int = 4         # Gradient steps per experience batch
+    clip_epsilon: float = 0.2              # PPO clipping parameter
+    kl_coeff: float = 0.04                 # KL penalty coefficient
+    entropy_coeff: float = 0.01            # Entropy bonus coefficient
+    max_grad_norm: float = 1.0             # Gradient clipping threshold
+    normalize_advantages: bool = True       # Enable advantage normalization
+    ref_update_frequency: int = 1          # Steps between reference updates
+```
+
+### 4.3  Key features
+• **Batched processing** – Splits large experience batches into smaller mini-batches for memory efficiency  
+• **Multi-epoch training** – Performs multiple optimization epochs on each collected batch, similar to PPO  
+• **Reference policy updates** – Periodically copies current policy to reference via `copy.deepcopy`  
+• **Comprehensive metrics** – Tracks per-epoch and aggregate statistics for all loss components  
+• **Gradient management** – Handles accumulation, clipping, and zeroing across mini-batches  
+• **Device awareness** – Automatically manages tensor devices for CPU/GPU compatibility  
+• **Checkpoint robustness** – Saves complete training state including optimizer and random number generators  
+• **Memory cleanup** – Proper tensor detachment and cleanup to prevent memory leaks  
+
+### 4.4  Training loop architecture
+
+The core training step follows this sequence:
+
+1. **Rollout phase**:
+   ```python
+   batch = self.experience_collector.collect_experiences(states)
+   advantages = self.advantage_estimator.compute_advantages(batch)
+   ```
+
+2. **Multi-epoch optimization**:
+   ```python
+   for epoch in range(self.config.num_epochs_per_update):
+       for mini_batch in self._create_mini_batches(batch, advantages):
+           loss_dict = self.objective.compute_loss(...)
+           loss_dict["total_loss"].backward()
+           # Gradient accumulation and clipping
+   ```
+
+3. **Reference policy updates**:
+   ```python
+   if self.step_count % self.config.ref_update_frequency == 0:
+       self.reference_policy = copy.deepcopy(self.policy)
+   ```
+
+### 4.5  Optimizations implemented
+
+1. **Mini-batch processing** – Reduces memory usage by processing large batches in smaller chunks
+2. **Gradient accumulation** – Enables effective larger batch sizes without memory overflow
+3. **Efficient tensor operations** – Minimizes device transfers and tensor copying
+4. **Reference policy sharing** – Reuses reference policy across epochs to avoid redundant deep copies
+5. **Metric caching** – Computes expensive statistics only when needed
+6. **Memory hygiene** – Explicit cleanup of temporary tensors and gradients
+
+### 4.6  Metrics and monitoring
+
+The trainer provides detailed metrics for monitoring training progress:
+
+**Per-step metrics**:
+- `step_loss` – Overall loss for the training step
+- `grad_norm` – Gradient norm before clipping
+- `advantage_mean/std` – Advantage distribution statistics
+- `total_samples` – Number of actions processed
+- `collection_time` – Time spent on experience collection
+- `advantage_time` – Time spent computing advantages
+
+**Per-epoch metrics** (for each optimization epoch):
+- `epoch_{i}_policy_loss` – Policy gradient loss
+- `epoch_{i}_kl_penalty` – KL divergence penalty
+- `epoch_{i}_entropy_bonus` – Entropy regularization bonus
+- `epoch_{i}_total_loss` – Combined loss
+
+### 4.7  Checkpoint management
+
+The trainer supports robust checkpointing for training resumption:
+
+```python
+# Save checkpoint
+trainer.save_checkpoint("model_checkpoint.pt", best_loss=current_loss)
+
+# Load checkpoint
+trainer.load_checkpoint("model_checkpoint.pt")
+```
+
+Checkpoints include:
+- Policy and reference policy state dictionaries
+- Optimizer state (including momentum terms)
+- Training step and epoch counters
+- Best loss tracking
+- Complete training history
+- Random number generator states (for reproducibility)
+
+### 4.8  Usage patterns
+
+**Basic training loop**:
+```python
+from grpo import GRPOTrainer, GRPOConfig
+from torch.optim import Adam
+
+config = GRPOConfig(
+    group_size=8,
+    batch_size=64,
+    num_epochs_per_update=4,
+    clip_epsilon=0.2
+)
+
+optimizer = Adam(policy.parameters(), lr=1e-4)
+trainer = GRPOTrainer(policy, reward_model, optimizer, config)
+
+for step in range(num_training_steps):
+    states = get_training_states()  # Your data source
+    metrics = trainer.train_step(states)
+    
+    if step % 100 == 0:
+        trainer.save_checkpoint(f"checkpoint_{step}.pt")
+        print(f"Step {step}: Loss = {metrics['step_loss']:.4f}")
+```
+
+**Advanced usage with custom scheduling**:
+```python
+# Custom learning rate scheduling
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=1000)
+
+# Training with validation
+for step in range(num_training_steps):
+    # Training
+    metrics = trainer.train_step(train_states)
+    scheduler.step()
+    
+    # Periodic validation
+    if step % 50 == 0:
+        with torch.no_grad():
+            val_batch = trainer.experience_collector.collect_experiences(val_states)
+            val_advantages = trainer.advantage_estimator.compute_advantages(val_batch)
+            val_metrics = trainer.objective.compute_loss(
+                trainer.policy, trainer.reference_policy, val_batch, val_advantages
+            )
+        print(f"Validation loss: {val_metrics['total_loss']:.4f}")
+```
+
+### 4.9  Error handling and robustness
+
+The trainer includes comprehensive error handling:
+- **Input validation** – Checks for empty state lists and malformed inputs
+- **Device consistency** – Ensures all tensors are on the correct device
+- **Gradient monitoring** – Detects and reports gradient explosion or vanishing
+- **Memory management** – Monitors and prevents memory leaks
+- **Checkpoint validation** – Verifies checkpoint integrity before loading
+
+---
+
+## 5. Base Interfaces – `policy_base.py` & `reward_model_base.py`
+
+### 5.1  Design philosophy
+The GRPO framework is **model-agnostic** by design. The base interfaces define minimal contracts that any policy or reward model must satisfy, enabling integration with:
+- Transformer language models (GPT, LLaMA, etc.)
+- Vision-language models (CLIP, DALL-E, etc.)  
+- Reinforcement learning agents (DQN, Actor-Critic, etc.)
+- Custom domain-specific models
+
+### 5.2  PolicyModel interface
+```python
+class PolicyModel(ABC):
+    @abstractmethod
+    def generate_actions(self, states: List[Any], num_actions_per_state: int, **kwargs) -> List[List[Any]]:
+        """Generate candidate actions for each state."""
+        
+    @abstractmethod  
+    def get_log_probabilities(self, states: List[Any], actions: List[Any]) -> Tensor:
+        """Compute log probabilities for state-action pairs."""
+        
+    @abstractmethod
+    def get_parameters(self) -> Dict[str, Any]:
+        """Return model parameters for optimization."""
+```
+
+### 5.3  RewardModel interface  
+```python
+class RewardModel(ABC):
+    @abstractmethod
+    def compute_rewards(self, states: List[Any], actions: List[Any]) -> Tensor:
+        """Assign scalar rewards to state-action pairs."""
+```
+
+### 5.4  Implementation guidelines
+- **Batching support** – Models should handle lists of states/actions efficiently
+- **Device management** – Models should be device-aware (CPU/GPU)
+- **Memory efficiency** – Avoid storing large intermediate tensors unnecessarily
+- **Error handling** – Validate inputs and provide informative error messages
+
+---
+
+This completes the comprehensive documentation of the GRPO framework. Each component is designed for modularity, efficiency, and ease of integration with existing ML pipelines. 

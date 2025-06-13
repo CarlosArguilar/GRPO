@@ -162,7 +162,8 @@ class GRPOObjective:
         if log_probs_current is None:
             log_probs_cur = current_policy.get_log_probabilities(states, actions)
         else:
-            log_probs_cur = log_probs_current.detach()  # avoid gradients flowing into KL
+            # Use the provided log_probs_current directly (with gradients)
+            log_probs_cur = log_probs_current
 
         with torch.no_grad():
             log_probs_ref = reference_policy.get_log_probabilities(states, actions)
