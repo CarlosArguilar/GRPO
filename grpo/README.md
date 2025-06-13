@@ -112,9 +112,9 @@ Transforms advantages into actual **parameter gradients**.  It combines:
 3. **Entropy bonus** – Optional exploration term.
 
 Mathematically (minimisation form):
-$$L = -\mathbf{E}[\min(\rho A, \hat{\rho} A)] + \lambda_{\text{KL}}\operatorname{KL}(\pi_\theta \parallel \pi_{\text{ref}}) - \beta_{\text{ent}} \mathcal{H}(\pi_\theta)$$
+$$L = -\mathbf{E}[\min(\rho A, \hat{\rho} A)] + \lambda_{\text{KL}} \text{KL}(\pi_\theta \parallel \pi_{\text{ref}}) - \beta_{\text{ent}} \mathcal{H}(\pi_\theta)$$
 
-with $\rho = \exp(\ell - \ell_0)$ and $\hat{\rho} = \operatorname{clip}(\rho, 1-\varepsilon, 1+\varepsilon)$.
+with $\rho = \exp(\ell - \ell_0)$ and $\hat{\rho} = \text{clip}(\rho, 1-\varepsilon, 1+\varepsilon)$.
 
 ### 3.2  Key features
 • **Device-aware tensors** – Automatically moves advantages & old log-probs to
