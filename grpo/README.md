@@ -100,8 +100,65 @@ advantages    = adv_estimator.compute_advantages(batch)  # 1-D torch.Tensor
 
 ---
 
+## 3. GRPO Objective – `grpo_objective.py`
+
+### 3.1  Role in the algorithm
+Transforms advantages into actual **parameter gradients**.  It combines:
+
+1. **Clipped likelihood-ratio surrogate** – Same safety mechanism as PPO but
+   driven by *group-relative* advantages.
+2. **KL penalty** – Keeps the policy from drifting too far from a fixed
+   reference (e.g. a pre-trained base LLM).
+3. **Entropy bonus** – Optional exploration term.
+
+Mathematically (minimisation form):
+\[
+L = -\mathbf E\big[\min(\rho A, \hat\rho A)\big]
+  + \lambda_{\text{KL}}\,\text{KL}(\pi_\theta\,||\,\pi_{\text{ref}})
+  - \beta_{\text{ent}}\, \mathcal H(\pi_\theta)
+\]
+with \(\rho = \exp(\ell - \ell_0)\) and \(\hat\rho = \mathrm{clip}(\rho, 1\!-\!\varepsilon,1\!+\!\varepsilon)\).
+
+### 3.2  Key features
+• **Device-aware tensors** – Automatically moves advantages & old log-probs to
+  the policy's device.
+• **Log-space computations** – Uses \(\ell-\ell_0\) instead of exponentiating
+  large values; improves numerical stability.
+• **KL reuse** – Re-uses already computed `log_probs_current` when evaluating
+  the KL term; avoids an extra forward pass.
+• **Shape validation** – Fails fast if the length of advantages doesn't match
+  the number of sampled actions.
+• **Modular components** – Separate helpers for policy loss, KL penalty, and
+  entropy bonus make maintenance straightforward.
+
+### 3.3  Optimisations implemented
+1. **Pre-allocated tensors** – Old log-probabilities converted directly into a
+   contiguous tensor on the target device.
+2. **Single flatten pass** – States/actions flattened once and reused across
+   all computations.
+3. **Early detach** – Detaches tensors where gradients are not needed to reduce
+   autograd overhead.
+
+### 3.4  Usage snippet
+```python
+from grpo.grpo_objective import GRPOObjective
+
+objective = GRPOObjective(clip_epsilon=0.2, kl_coeff=0.04, entropy_coeff=0.01)
+loss_dict = objective.compute_loss(
+    current_policy,
+    reference_policy,
+    experience_batch,
+    advantages,
+)
+
+loss = loss_dict["total_loss"]
+loss.backward()
+optimizer.step()
+```
+
+---
+
 *Future sections will document:*  
-• GRPO clipped objective (`grpo_objective.py`)  
 • Training loop orchestration (`trainer.py`)  
 • Base interfaces (`policy_base.py`, `reward_model_base.py`)  
 • Utility helpers (`utils/`) and logging facilities. 
