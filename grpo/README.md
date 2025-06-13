@@ -120,7 +120,7 @@ Where:
 * $\ell_0$ = log-probability of the same action under the **behaviour / old** policy (recorded during rollout)
 * $A$     = *group-relative advantage* produced by the Advantage Estimator
 * $\rho = \exp(\ell - \ell_0)$ = likelihood ratio
-* $\hat{\rho} = \text{clip}(\rho, 1-\varepsilon, 1+\varepsilon)$ = clipped likelihood ratio with hyper-parameter $\varepsilon = \text{clip_epsilon}$
+* $\hat{\rho} = \text{clip}(\rho, 1-\varepsilon_{\text{clip}}, 1+\varepsilon_{\text{clip}})$ = clipped likelihood ratio with hyper-parameter $\varepsilon_{\text{clip}}$
 * $\lambda_{\text{KL}}$ = coefficient controlling the **KL penalty** to the reference policy $\pi_{\text{ref}}$
 * $\beta_{\text{ent}}$ = coefficient for the **entropy bonus**
 * $\mathcal H(\pi_\theta)$ = Shannon entropy of the current policy's action distribution
