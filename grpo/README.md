@@ -117,36 +117,28 @@ $$L = -\mathbf{E}[\min(\rho A, \hat{\rho} A)] + \lambda_{\text{KL}} \text{KL}(\p
 Where:
 
 * $\ell$ = log-probability of the selected action under the **current** policy $\pi_\theta$
-
 * $\ell_0$ = log-probability of the same action under the **behaviour / old** policy (recorded during rollout)
-
 * $A$     = *group-relative advantage* produced by the Advantage Estimator
-
 * $\rho = \exp(\ell - \ell_0)$ = likelihood ratio
-
 * $\hat{\rho} = \text{clip}(\rho, 1-\varepsilon_{\text{clip}}, 1+\varepsilon_{\text{clip}})$ = clipped likelihood ratio with hyper-parameter $\varepsilon_{\text{clip}}$
-
 * $\lambda_{\text{KL}}$ = coefficient controlling the **KL penalty** to the reference policy $\pi_{\text{ref}}$
-
 * $\beta_{\text{ent}}$ = coefficient for the **entropy bonus**
-
 * $\mathcal H(\pi_\theta)$ = Shannon entropy of the current policy's action distribution
-
 * $\mathbf{E}[\,\cdot\,]$ = expectation over the collected batch of actions
 
 Intuitively: we *maximise* the clipped surrogate term (hence minimise its negative),
 keep the policy close to $\pi_{\text{ref}}$ via the KL penalty, and optionally encourage exploration with the entropy bonus.
 
 ### 3.2  Key features
-• **Device-aware tensors** – Automatically moves advantages & old log-probs to
+* **Device-aware tensors** – Automatically moves advantages & old log-probs to
   the policy's device.
-• **Log-space computations** – Uses $\ell-\ell_0$ instead of exponentiating
+* **Log-space computations** – Uses $\ell-\ell_0$ instead of exponentiating
   large values; improves numerical stability.
-• **KL reuse** – Re-uses already computed `log_probs_current` when evaluating
+* **KL reuse** – Re-uses already computed `log_probs_current` when evaluating
   the KL term; avoids an extra forward pass.
-• **Shape validation** – Fails fast if the length of advantages doesn't match
+* **Shape validation** – Fails fast if the length of advantages doesn't match
   the number of sampled actions.
-• **Modular components** – Separate helpers for policy loss, KL penalty, and
+* **Modular components** – Separate helpers for policy loss, KL penalty, and
   entropy bonus make maintenance straightforward.
 
 ### 3.3  Optimisations implemented
