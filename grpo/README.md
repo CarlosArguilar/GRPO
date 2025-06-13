@@ -61,10 +61,10 @@ Once we have sampled actions and rewards, GRPO needs a *signal* that tells each
 action **how much better or worse it is** relative to its competition **within
 the same state**.  That signal is the *group-relative advantage*:
 
-\[ A_{i,j} = r_{i,j} - \bar r_i \]
+`$A_{i,j} = r_{i,j} - \bar r_i$`
 
-where \(\bar r_i\) is the mean reward over the *group_size* actions sampled for
-state \(i\).  The advantage is later plugged into the clipped GRPO objective to
+where $\bar r_i$ is the mean reward over the *group_size* actions sampled for
+state $i$.  The advantage is later plugged into the clipped GRPO objective to
 scale policy-gradient updates.
 
 ### 2.2  Key features
@@ -112,12 +112,13 @@ Transforms advantages into actual **parameter gradients**.  It combines:
 3. **Entropy bonus** – Optional exploration term.
 
 Mathematically (minimisation form):
-\[
-L = -\mathbf E\big[\min(\rho A, \hat\rho A)\big]
-  + \lambda_{\text{KL}}\,\text{KL}(\pi_\theta\,||\,\pi_{\text{ref}})
+$$
+L = -\mathbf E[\min(\rho A, \hat{\rho} A)]
+  + \lambda_{\text{KL}}\,\operatorname{KL}(\pi_\theta\,||\,\pi_{\text{ref}})
   - \beta_{\text{ent}}\, \mathcal H(\pi_\theta)
-\]
-with \(\rho = \exp(\ell - \ell_0)\) and \(\hat\rho = \mathrm{clip}(\rho, 1\!-\!\varepsilon,1\!+\!\varepsilon)\).
+$$
+
+with $\rho = \exp(\ell - \ell_0)$ and $\hat{\rho} = \operatorname{clip}(\rho, 1-\varepsilon, 1+\varepsilon)$.
 
 ### 3.2  Key features
 • **Device-aware tensors** – Automatically moves advantages & old log-probs to
