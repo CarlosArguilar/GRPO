@@ -380,4 +380,82 @@ class RewardModel(ABC):
 
 ---
 
+## Model Validation
+
+Since GRPO uses Protocol classes (duck typing), your models don't need to inherit from `PolicyModel` or `RewardModel`. However, they must implement the required methods. GRPO provides validation utilities to help you check this:
+
+### Automatic Validation
+
+The `GRPOTrainer` automatically validates models when you create it:
+
+```python
+import grpo
+
+# This will raise a TypeError if your models don't implement required methods
+trainer = grpo.GRPOTrainer(
+    policy_model=your_policy,
+    reward_model=your_reward_model
+)
+```
+
+
+### What Happens When Methods Are Missing?
+
+#### 1. **Development Time (Static Type Checking)**
+If you use mypy or an IDE with type checking, you'll get warnings:
+
+```python
+class IncompletePolicy:
+    def generate_actions(self, states, num_actions_per_state, **kwargs):
+        return [[f"action_{i}"] for _ in states for i in range(num_actions_per_state)]
+    # Missing: get_log_probabilities, get_parameters, train, eval, to
+
+policy: grpo.PolicyModel = IncompletePolicy()  # Type checker warning
+```
+
+#### 2. **Runtime Validation**
+GRPO will catch missing methods early with helpful error messages:
+
+```python
+class IncompletePolicy:
+    def generate_actions(self, states, num_actions_per_state, **kwargs):
+        return [[f"action_{i}"] for _ in states for i in range(num_actions_per_state)]
+
+try:
+    trainer = grpo.GRPOTrainer(
+        policy_model=IncompletePolicy(),
+        reward_model=your_reward_model
+    )
+except TypeError as e:
+    print(e)
+    # Output: Model IncompletePolicy does not implement PolicyModel protocol.
+    # Missing methods: get_log_probabilities, get_parameters, train, eval, to
+    # Required methods: generate_actions, get_log_probabilities, get_parameters, train, eval, to
+```
+
+#### 3. **Runtime Errors (If Validation Is Bypassed)**
+If validation is somehow bypassed and missing methods are called:
+
+```python
+incomplete_model.eval()  # AttributeError: 'IncompletePolicy' object has no attribute 'eval'
+```
+
+### Required Methods Summary
+
+**PolicyModel Protocol:**
+- `generate_actions(states, num_actions_per_state, **kwargs) -> List[List[Any]]`
+- `get_log_probabilities(states, actions) -> Tensor`
+- `get_parameters() -> Dict[str, Tensor]`
+- `train() -> None`
+- `eval() -> None`
+- `to(device) -> PolicyModel`
+
+**RewardModel Protocol:**
+- `compute_rewards(states, actions) -> Tensor`
+- `to(device) -> RewardModel`
+- `eval() -> None`
+- `train() -> None`
+
+---
+
 This completes the comprehensive documentation of the GRPO framework. Each component is designed for modularity, efficiency, and ease of integration with existing ML pipelines. 

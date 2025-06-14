@@ -1,13 +1,16 @@
-from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Tuple, Optional, Union
+from typing import List, Dict, Any, Tuple, Optional, Union, Protocol
 import torch
 from torch import Tensor
 
 
-class PolicyModel(ABC):
-    """Abstract base class for policy models used in GRPO training - model agnostic."""
+class PolicyModel(Protocol):
+    """Protocol for policy models used in GRPO training - model agnostic.
     
-    @abstractmethod
+    This protocol defines the interface that policy models should implement.
+    Models don't need to inherit from this class - they just need to implement
+    these methods (duck typing).
+    """
+    
     def generate_actions(
         self, 
         states: List[Any], 
@@ -25,9 +28,8 @@ class PolicyModel(ABC):
         Returns:
             List of lists, where each inner list contains actions for one state
         """
-        raise NotImplementedError
+        ...
     
-    @abstractmethod
     def get_log_probabilities(
         self, 
         states: List[Any], 
@@ -43,24 +45,80 @@ class PolicyModel(ABC):
         Returns:
             Tensor of log probabilities for each (state, action) pair
         """
-        raise NotImplementedError
+        ...
     
-    @abstractmethod
     def get_parameters(self) -> Dict[str, Tensor]:
         """Get model parameters for optimization."""
-        raise NotImplementedError
+        ...
     
-    @abstractmethod
     def train(self) -> None:
         """Set model to training mode."""
-        raise NotImplementedError
+        ...
     
-    @abstractmethod
     def eval(self) -> None:
         """Set model to evaluation mode."""
-        raise NotImplementedError
+        ...
     
-    @abstractmethod
     def to(self, device: torch.device) -> 'PolicyModel':
         """Move model to specified device."""
-        raise NotImplementedError
+        ...
+
+
+def validate_policy_model(model: Any) -> Tuple[bool, List[str]]:
+    """
+    Validate that a model implements the PolicyModel protocol.
+    
+    Args:
+        model: The model to validate
+        
+    Returns:
+        Tuple of (is_valid, list_of_missing_methods)
+    """
+    required_methods = [
+        'generate_actions',
+        'get_log_probabilities', 
+        'get_parameters',
+        'train',
+        'eval',
+        'to'
+    ]
+    
+    missing_methods = []
+    for method_name in required_methods:
+        if not hasattr(model, method_name):
+            missing_methods.append(method_name)
+        elif not callable(getattr(model, method_name)):
+            missing_methods.append(f"{method_name} (not callable)")
+    
+    return len(missing_methods) == 0, missing_methods
+
+
+def check_policy_model(model: Any, raise_on_invalid: bool = True) -> bool:
+    """
+    Check if a model implements PolicyModel protocol, with helpful error messages.
+    
+    Args:
+        model: The model to check
+        raise_on_invalid: Whether to raise an exception if invalid
+        
+    Returns:
+        True if valid, False otherwise (if raise_on_invalid=False)
+        
+    Raises:
+        TypeError: If model is invalid and raise_on_invalid=True
+    """
+    is_valid, missing_methods = validate_policy_model(model)
+    
+    if not is_valid:
+        error_msg = (
+            f"Model {type(model).__name__} does not implement PolicyModel protocol.\n"
+            f"Missing methods: {', '.join(missing_methods)}\n"
+            f"Required methods: generate_actions, get_log_probabilities, get_parameters, train, eval, to"
+        )
+        if raise_on_invalid:
+            raise TypeError(error_msg)
+        else:
+            print(f"Warning: {error_msg}")
+            return False
+    
+    return True

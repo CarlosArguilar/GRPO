@@ -17,6 +17,10 @@ from .experience_collector import ExperienceCollector
 from .advantage_estimator import AdvantageEstimator
 from .grpo_objective import GRPOObjective
 
+# Import validation functions from base modules
+from .policy_base import check_policy_model
+from .reward_model_base import check_reward_model
+
 
 class GRPOConfig:
     """Configuration class for GRPO training with validation."""
@@ -84,6 +88,12 @@ class GRPOTrainer:
         config: Optional[GRPOConfig] = None,
         reference_policy: Optional[PolicyModel] = None
     ) -> None:
+        # Validate models implement required protocols
+        check_policy_model(policy_model, raise_on_invalid=True)
+        check_reward_model(reward_model, raise_on_invalid=True)
+        if reference_policy is not None:
+            check_policy_model(reference_policy, raise_on_invalid=True)
+        
         # Default config if not provided
         self.config = config or GRPOConfig()
         
